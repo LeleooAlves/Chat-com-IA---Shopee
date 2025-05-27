@@ -1,7 +1,8 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import Message from './Message';
 import ChatInput from './ChatInput';
+import { generateResponse } from '../services/geminiService';
+import { useAuth } from '../context/AuthContext';
 
 interface ChatMessage {
   id: string;
@@ -11,6 +12,7 @@ interface ChatMessage {
 }
 
 const Chat: React.FC = () => {
+  const { logout } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
@@ -38,28 +40,45 @@ const Chat: React.FC = () => {
       timestamp: new Date()
     };
 
-    // Substitui a mensagem anterior como solicitado
-    setMessages([userMessage]);
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
     setIsTyping(true);
 
-    // Simula resposta da IA (futura integração)
-    setTimeout(() => {
-      const aiResponse: ChatMessage = {
+    try {
+      // Envie apenas o histórico a partir da primeira mensagem do usuário
+      const firstUserIdx = updatedMessages.findIndex(msg => msg.isUser);
+      const history = updatedMessages
+        .slice(firstUserIdx)
+        .map(msg => ({
+          content: msg.content,
+          isUser: msg.isUser
+        }));
+
+      const aiResponse = await generateResponse(content, history);
+      const aiMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
-        content: 'Obrigado pela sua mensagem! Em breve terei integração com IA para te ajudar melhor. 🛍️',
+        content: aiResponse.text,
         isUser: false,
         timestamp: new Date()
       };
-      
-      setMessages([userMessage, aiResponse]);
+      setMessages([...updatedMessages, aiMessage]);
+    } catch (error) {
+      const errorMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        content: 'Desculpe, ocorreu um erro ao processar sua mensagem. Por favor, tente novamente.',
+        isUser: false,
+        timestamp: new Date()
+      };
+      setMessages([...updatedMessages, errorMessage]);
+    } finally {
       setIsTyping(false);
-    }, 1500);
+    }
   };
 
   return (
     <div className="flex flex-col h-full bg-white rounded-2xl shadow-2xl overflow-hidden">
       {/* Header */}
-      <div className="bg-gradient-to-r from-shopee-orange to-shopee-orange-light text-white p-4 flex items-center justify-center">
+      <div className="bg-gradient-to-r from-shopee-orange to-shopee-orange-light text-white p-4 flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center">
             <svg
@@ -75,6 +94,7 @@ const Chat: React.FC = () => {
             <p className="text-sm text-orange-100">Assistente Virtual</p>
           </div>
         </div>
+        <button onClick={logout} className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600">Sair</button>
       </div>
 
       {/* Messages */}
